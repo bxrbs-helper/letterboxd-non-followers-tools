@@ -4,8 +4,8 @@
 // @version      0.2.1
 // @description  Shows who you follow on Letterboxd but who don't follow you back. UI mejorada sin cambiar lógica.
 // @author       Community
-// @match        *://letterboxd.com/*
-// @match        *://www.letterboxd.com/*
+// @match        ://letterboxd.com/
+// @match        ://www.letterboxd.com/
 // @grant        GM_addStyle
 // @grant        GM_setClipboard
 // ==/UserScript==
