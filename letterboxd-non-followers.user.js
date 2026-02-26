@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Letterboxd Non-Followers (Community Tool)
 // @namespace    community.letterboxd.tools
-// @version      0.3.0
-// @description  Shows who you follow on Letterboxd but who don't follow you back. Stable panel fix for SPA.
+// @version      0.3.1
+// @description  Shows who you follow on Letterboxd but who don't follow you back. Stable panel + robust parsing for SPA.
 // @author       Community
 // @match        *://letterboxd.com/*
 // @match        *://www.letterboxd.com/*
@@ -17,6 +17,7 @@
   if (window.__LB_TOOL_LOADED__) return;
   window.__LB_TOOL_LOADED__ = true;
 
+  // ---------- Styles ----------
   GM_addStyle(`
     .lbtool-panel{
       position:fixed; top:18px; right:18px; width:380px; max-height:82vh; overflow:hidden;
@@ -24,70 +25,143 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       box-shadow:0 10px 30px rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.10);
     }
-    .lbtool-title{display:flex; align-items:center; justify-content:space-between;}
+    .lbtool-title{display:flex; align-items:center; justify-content:space-between; gap:10px;}
     .lbtool-title h3{margin:0; font-size:16px; font-weight:800;}
-    .lbtool-x{border:0;background:#2a2a2a;color:#fff;border-radius:10px;padding:6px 10px;cursor:pointer;font-weight:700;}
-    .lbtool-row{display:flex; gap:8px; flex-wrap:wrap; margin:12px 0;}
-    .lbtool-btn{border:0;border-radius:10px;padding:8px 10px;cursor:pointer;background:#00c2a8;color:#001;font-weight:800;font-size:13px;}
-    .lbtool-btn.secondary{background:#2a2a2a;color:#fff;}
-    .lbtool-btn.danger{background:#ff4d4f;color:#fff;}
+    .lbtool-x{
+      appearance:none; border:0; background:#2a2a2a; color:#fff; border-radius:10px;
+      padding:6px 10px; cursor:pointer; font-weight:700;
+    }
+    .lbtool-kv{
+      display:grid; grid-template-columns:1fr auto; gap:6px;
+      font-size:13px; opacity:.95; margin-top:10px;
+      border-top:1px solid rgba(255,255,255,.08); padding-top:10px;
+    }
+    .lbtool-row{display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 10px 0;}
+    .lbtool-btn{
+      appearance:none; border:0; border-radius:10px; padding:8px 10px; cursor:pointer;
+      background:#00c2a8; color:#001; font-weight:800; font-size:13px;
+    }
+    .lbtool-btn.secondary{background:#2a2a2a; color:#fff; font-weight:700;}
+    .lbtool-btn.danger{background:#ff4d4f; color:#fff;}
+    .lbtool-btn:disabled{opacity:.55; cursor:not-allowed}
     .lbtool-log{
       white-space:pre-wrap;
-      font-family:ui-monospace,monospace;
-      background:#0a0a0a;border-radius:10px;padding:10px;
+      font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background:#0a0a0a; border-radius:10px; padding:10px;
       border:1px solid rgba(255,255,255,.08);
-      font-size:12px;max-height:200px;overflow:auto;
+      font-size:12px; line-height:1.35;
+      max-height:220px; overflow:auto;
     }
     .lbtool-list{
-      margin-top:10px;background:#0a0a0a;border-radius:10px;padding:10px;
+      margin-top:10px;
+      background:#0a0a0a; border-radius:10px; padding:10px;
       border:1px solid rgba(255,255,255,.08);
-      max-height:240px;overflow:auto;
+      max-height:240px; overflow:auto;
     }
     .lbtool-item{
-      display:flex;align-items:center;justify-content:space-between;
-      padding:8px;background:#111;border-radius:10px;margin-bottom:8px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:8px; background:#111; border-radius:10px; margin-bottom:8px;
     }
+    .lbtool-item:last-child{margin-bottom:0;}
+    .lbtool-user{
+      display:flex; flex-direction:column; gap:2px; min-width:0;
+    }
+    .lbtool-user a{
+      color:#00c2a8; text-decoration:none; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .lbtool-user small{opacity:.75;}
+    .lbtool-actions{display:flex; gap:8px; flex-shrink:0;}
     .lbtool-fab{
       position:fixed; bottom:18px; right:18px; z-index:9999999;
       background:#111; color:#fff; border:1px solid rgba(255,255,255,.15);
-      border-radius:999px; padding:10px 14px; cursor:pointer;
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      border-radius:999px; padding:10px 12px; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.35);
       font-weight:900; font-size:13px;
+    }
+    .lbtool-muted{opacity:.75}
+    .lbtool-footer{
+      margin-top:10px; font-size:12px; opacity:.75;
+      border-top:1px solid rgba(255,255,255,.08); padding-top:10px;
     }
   `);
 
+  // ---------- State ----------
   let panel = null;
   let lastNoFollowers = [];
   let lastUser = null;
 
+  // ---------- Helpers ----------
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const domp = new DOMParser();
 
+  const reserved = new Set([
+    'films','film','lists','list','diary','watchlist','likes','news','about','journal','apps','legal',
+    'pro','upgrade','members','people','activity','settings','create','reviews','search','tags','crew',
+    'actor','director','network','stats','signin','sign-in','signout','sign-out','register','logout',
+    'stories','sitemap','welcome'
+  ]);
+
   function detectUser() {
+    // 1) Primero intento por URL
     const parts = location.pathname.split('/').filter(Boolean);
-    return parts.length ? parts[0] : null;
+    if (parts.length) {
+      const first = (parts[0] || '').toLowerCase();
+      if (first && !reserved.has(first)) return first;
+    }
+
+    // 2) Fallback: og:url
+    const og = document.querySelector('meta[property="og:url"]')?.getAttribute('content') || '';
+    const mm = og.match(/letterboxd\.com\/([A-Za-z0-9._-]+)\//i);
+    if (mm) {
+      const u = mm[1].toLowerCase();
+      if (!reserved.has(u)) return u;
+    }
+
+    // 3) Fallback: canonical
+    const canon = document.querySelector('link[rel="canonical"]')?.getAttribute('href') || '';
+    const mc = canon.match(/letterboxd\.com\/([A-Za-z0-9._-]+)\//i);
+    if (mc) {
+      const u = mc[1].toLowerCase();
+      if (!reserved.has(u)) return u;
+    }
+
+    return null;
   }
 
   function parsePeople(doc) {
+    // ROBUSTO: cualquier link que sea "/username/" cuenta,
+    // pero filtramos rutas reservadas y basura.
     const out = new Set();
-    const nodes = doc.querySelectorAll('li.person-summary a[href^="/"]');
-    nodes.forEach(a => {
-      const href = a.getAttribute('href') || '';
+    const anchors = doc.querySelectorAll('a[href^="/"]');
+
+    anchors.forEach(a => {
+      const href = (a.getAttribute('href') || '').trim();
+      // Solo rutas exactas /user/ (sin extra)
       const mm = href.match(/^\/([A-Za-z0-9._-]+)\/$/);
-      if (mm) out.add(mm[1].toLowerCase());
+      if (!mm) return;
+
+      const u = mm[1].toLowerCase().trim();
+      if (!u) return;
+      if (reserved.has(u)) return;
+
+      out.add(u);
     });
+
     return out;
   }
 
   async function scrapeAll(user, type, logFn) {
     const base = `${location.origin}/${user}/${type}/`;
     const users = new Set();
-    let empty = 0;
+    let emptyStreak = 0;
 
-    for (let p = 1; p <= 500; p++) {
+    for (let p = 1; p <= 800; p++) {
       const url = p === 1 ? base : `${base}page/${p}/`;
+
       const res = await fetch(url, { credentials: 'include' });
-      if (!res.ok) break;
+      if (!res.ok) {
+        logFn(`${type} page ${p}: fetch error ${res.status}`);
+        break;
+      }
 
       const html = await res.text();
       const doc = domp.parseFromString(html, 'text/html');
@@ -98,46 +172,127 @@
 
       logFn(`${type} page ${p}: +${added} (total ${users.size})`);
 
-      if (added === 0) empty++;
-      else empty = 0;
+      if (added === 0) emptyStreak++;
+      else emptyStreak = 0;
 
-      if (empty >= 2) break;
-      await sleep(300);
+      // si 2 páginas seguidas no agregan nada, ya terminamos
+      if (emptyStreak >= 2) break;
+
+      await sleep(250);
     }
 
-    return [...users];
+    return [...users].sort();
   }
 
-  function log(msg) {
+  function mkCSV(owner, kind, arr) {
+    const ts = new Date().toISOString();
+    const header = "username,profile_url,kind,owner,timestamp";
+    const lines = arr.map(u => `${u},https://letterboxd.com/${u}/,${kind},${owner},${ts}`);
+    return [header, ...lines].join("\n");
+  }
+
+  function setText(sel, v) {
+    const el = panel?.querySelector(sel);
+    if (el) el.textContent = v;
+  }
+
+  function logSet(msg) {
+    const el = panel?.querySelector('#lbtool-log');
+    if (el) el.textContent = msg;
+  }
+
+  function logAppend(msg) {
     const el = panel?.querySelector('#lbtool-log');
     if (el) el.textContent += `\n${msg}`;
   }
 
-  function renderList(users) {
-    const box = panel.querySelector('#lbtool-list');
+  function clearList() {
+    const box = panel?.querySelector('#lbtool-list');
+    if (box) box.innerHTML = '';
+  }
+
+  function renderList(owner, users) {
+    const box = panel?.querySelector('#lbtool-list');
+    if (!box) return;
+
     box.innerHTML = '';
+
+    if (!users.length) {
+      const div = document.createElement('div');
+      div.className = 'lbtool-muted';
+      div.textContent = '🎉 Todos te siguen de vuelta. Ego cinematográfico intacto.';
+      box.appendChild(div);
+      return;
+    }
 
     users.forEach(u => {
       const row = document.createElement('div');
       row.className = 'lbtool-item';
 
-      const name = document.createElement('span');
-      name.textContent = `@${u}`;
+      const userCol = document.createElement('div');
+      userCol.className = 'lbtool-user';
 
-      const btn = document.createElement('button');
-      btn.className = 'lbtool-btn danger';
-      btn.textContent = 'Unfollow';
-      btn.onclick = () => window.open(`https://letterboxd.com/${u}/`, '_blank');
+      const a = document.createElement('a');
+      a.href = `https://letterboxd.com/${u}/`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = `@${u}`;
 
-      row.appendChild(name);
-      row.appendChild(btn);
+      const small = document.createElement('small');
+      small.textContent = `https://letterboxd.com/${u}/`;
+
+      userCol.appendChild(a);
+      userCol.appendChild(small);
+
+      const actions = document.createElement('div');
+      actions.className = 'lbtool-actions';
+
+      const btnOpen = document.createElement('button');
+      btnOpen.className = 'lbtool-btn danger';
+      btnOpen.textContent = 'Unfollow';
+      btnOpen.title = 'Abre el perfil en una pestaña nueva (ahí hacés unfollow con 1 click).';
+      btnOpen.onclick = () => window.open(`https://letterboxd.com/${u}/`, '_blank', 'noopener,noreferrer');
+
+      actions.appendChild(btnOpen);
+
+      row.appendChild(userCol);
+      row.appendChild(actions);
       box.appendChild(row);
     });
   }
 
+  function openAllProfiles(users) {
+    (async () => {
+      for (let i = 0; i < users.length; i++) {
+        window.open(`https://letterboxd.com/${users[i]}/`, '_blank', 'noopener,noreferrer');
+        await sleep(250);
+      }
+    })();
+  }
+
+  function downloadText(filename, content) {
+    try {
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.documentElement.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ---------- UI ----------
   function openPanel() {
     if (panel) {
       panel.style.display = 'block';
+      // refresca usuario detectado
+      setText('#lbtool-user', detectUser() || '—');
       return;
     }
 
@@ -149,72 +304,134 @@
         <button class="lbtool-x" id="lbtool-close">Cerrar</button>
       </div>
 
+      <div class="lbtool-kv">
+        <div>Usuario detectado</div><div id="lbtool-user">—</div>
+        <div>Following</div><div id="lbtool-following">—</div>
+        <div>Followers</div><div id="lbtool-followers">—</div>
+        <div>No me siguen</div><div id="lbtool-nf">—</div>
+        <div>Mutuos</div><div id="lbtool-mutuals">—</div>
+      </div>
+
       <div class="lbtool-row">
         <button class="lbtool-btn" id="lbtool-run">RUN</button>
-        <button class="lbtool-btn secondary" id="lbtool-openall" disabled>Abrir todos</button>
+        <button class="lbtool-btn secondary" id="lbtool-copy" disabled>Copiar lista</button>
+        <button class="lbtool-btn secondary" id="lbtool-export" disabled>Exportar CSV</button>
+        <button class="lbtool-btn danger" id="lbtool-openall" disabled>Abrir todos</button>
       </div>
 
       <div class="lbtool-log" id="lbtool-log">Listo. Tocá RUN.</div>
+
       <div class="lbtool-list" id="lbtool-list"></div>
+
+      <div class="lbtool-footer">
+        Unfollow es “asistido”: abre el perfil en pestaña nueva para que confirmes el botón del sitio.
+      </div>
     `;
 
+    // CLAVE: anexar al documentElement (más estable en SPA)
     document.documentElement.appendChild(panel);
 
-    panel.querySelector('#lbtool-close').onclick = () => {
-      panel.style.display = 'none';
+    panel.querySelector('#lbtool-close').onclick = () => { panel.style.display = 'none'; };
+
+    panel.querySelector('#lbtool-run').onclick = run;
+
+    panel.querySelector('#lbtool-copy').onclick = () => {
+      GM_setClipboard(lastNoFollowers.join('\n'));
+      alert('Lista copiada ✅');
     };
 
-    panel.querySelector('#lbtool-run').onclick = async () => {
-      lastUser = detectUser();
-      if (!lastUser) {
-        log("Abrí tu perfil primero.");
-        return;
+    panel.querySelector('#lbtool-export').onclick = () => {
+      if (!lastUser) return;
+      const csv = mkCSV(lastUser, 'no-me-siguen', lastNoFollowers);
+      const ok = downloadText(`letterboxd-no-me-siguen-@${lastUser}.csv`, csv);
+      if (!ok) {
+        alert('No pude descargar el CSV. Lo dejé en window.__LB_CSV__ para copiar desde consola.');
+        window.__LB_CSV__ = csv;
       }
-
-      log(`Analizando usuario: ${lastUser}`);
-
-      const following = await scrapeAll(lastUser, 'following', log);
-      const followers = await scrapeAll(lastUser, 'followers', log);
-
-      const fset = new Set(followers);
-      lastNoFollowers = following.filter(u => !fset.has(u));
-
-      log(`\n✅ No te siguen: ${lastNoFollowers.length}`);
-      renderList(lastNoFollowers);
-
-      panel.querySelector('#lbtool-openall').disabled = lastNoFollowers.length === 0;
     };
 
     panel.querySelector('#lbtool-openall').onclick = () => {
-      lastNoFollowers.forEach((u, i) => {
-        setTimeout(() => {
-          window.open(`https://letterboxd.com/${u}/`, '_blank');
-        }, i * 300);
-      });
+      if (!lastNoFollowers.length) return;
+      if (!confirm(`Esto va a abrir ${lastNoFollowers.length} pestañas. ¿Seguimos?`)) return;
+      openAllProfiles(lastNoFollowers);
     };
+
+    setText('#lbtool-user', detectUser() || '—');
   }
 
-  function injectButton() {
+  // ---------- RUN ----------
+  async function run() {
+    lastUser = detectUser();
+    setText('#lbtool-user', lastUser || '—');
+
+    if (!lastUser) {
+      logSet('No pude detectar el usuario. Abrí tu perfil (https://letterboxd.com/TUUSUARIO/) y reintentá.');
+      return;
+    }
+
+    const runBtn = panel.querySelector('#lbtool-run');
+    const copyBtn = panel.querySelector('#lbtool-copy');
+    const exportBtn = panel.querySelector('#lbtool-export');
+    const openAllBtn = panel.querySelector('#lbtool-openall');
+
+    runBtn.disabled = true;
+    copyBtn.disabled = true;
+    exportBtn.disabled = true;
+    openAllBtn.disabled = true;
+
+    lastNoFollowers = [];
+    clearList();
+    logSet(`Usuario: ${lastUser}\nRecolectando followers y following… (puede tardar un poco)\n`);
+
+    const following = await scrapeAll(lastUser, 'following', (m) => logAppend(m));
+    const followers = await scrapeAll(lastUser, 'followers', (m) => logAppend(m));
+
+    const fset = new Set(followers);
+    const noFollowBack = following.filter(u => !fset.has(u));
+    const mutuals = following.filter(u => fset.has(u));
+
+    lastNoFollowers = noFollowBack;
+
+    setText('#lbtool-following', String(following.length));
+    setText('#lbtool-followers', String(followers.length));
+    setText('#lbtool-nf', String(noFollowBack.length));
+    setText('#lbtool-mutuals', String(mutuals.length));
+
+    logAppend(`\n✅ Listo. No me siguen: ${noFollowBack.length}`);
+
+    renderList(lastUser, noFollowBack);
+
+    copyBtn.disabled = false;
+    exportBtn.disabled = false;
+    openAllBtn.disabled = noFollowBack.length === 0;
+    runBtn.disabled = false;
+  }
+
+  // ---------- Floating button (stable, SPA safe) ----------
+  function injectFAB() {
     if (document.querySelector('.lbtool-fab')) return;
 
     const fab = document.createElement('button');
     fab.className = 'lbtool-fab';
     fab.textContent = '🎬 Non-Followers';
-    fab.onclick = openPanel;
 
+    // anexar al documentElement (más estable en SPA)
     document.documentElement.appendChild(fab);
+
+    // captura para que Letterboxd no “mate” el click
+    fab.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openPanel();
+    }, true);
   }
 
-  // FIX CRÍTICO: Letterboxd es SPA → reinyección automática
+  injectFAB();
+
+  // SPA support: si Letterboxd re-renderiza y borra el botón, lo reinyectamos
   const observer = new MutationObserver(() => {
-    injectButton();
+    if (!document.querySelector('.lbtool-fab')) injectFAB();
   });
-
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true
-  });
-
-  injectButton();
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 
 })();
