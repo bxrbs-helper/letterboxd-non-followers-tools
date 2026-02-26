@@ -2,10 +2,10 @@
 // @name         Letterboxd Non-Followers (Community Tool)
 // @namespace    community.letterboxd.tools
 // @version      0.2.1
-// @description  Shows who you follow on Letterboxd but who don't follow you back. UI mejorada sin cambiar lógica.
+// @description  Shows who you follow on Letterboxd but who don't follow you back.
 // @author       Community
-// @match        ://letterboxd.com/
-// @match        ://www.letterboxd.com/
+// @match        *://letterboxd.com/*
+// @match        *://www.letterboxd.com/*
 // @grant        GM_addStyle
 // @grant        GM_setClipboard
 // ==/UserScript==
@@ -13,83 +13,49 @@
 (function () {
 'use strict';
 
-// ---------- Styles (SOLO ESTÉTICA) ----------
+// ---------- Styles (MISMO ESTILO + spinner, sin tocar lógica) ----------
 GM_addStyle(`
 .lbtool-panel{
-  position:fixed; top:18px; right:18px; width:380px; max-height:82vh; overflow:hidden;
-  background:linear-gradient(180deg,#0f1115,#0a0c10);
-  color:#fff; z-index:999999; border-radius:16px; padding:16px;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-  box-shadow:0 20px 60px rgba(0,0,0,.55);
-  border:1px solid rgba(255,255,255,.08);
+ position:fixed; top:18px; right:18px; width:380px; max-height:82vh; overflow:hidden;
+ background:#111; color:#fff; z-index:999999; border-radius:14px; padding:14px;
+ font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+ box-shadow:0 10px 30px rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.10);
 }
-
-.lbtool-title{
-  display:flex; align-items:center; justify-content:space-between;
-}
-
-.lbtool-title h3{
-  margin:0; font-size:16px; font-weight:900;
-}
-
-.lbtool-x{
-  border:0; background:#1f232b; color:#fff; border-radius:10px;
-  padding:6px 12px; cursor:pointer; font-weight:800;
-}
-
-.lbtool-status{
-  display:flex; align-items:center; gap:10px;
-  margin:12px 0 6px 0; font-weight:700;
-}
-
-.lbtool-spinner{
-  width:16px; height:16px; border-radius:50%;
-  border:3px solid rgba(0,255,200,.2);
-  border-top:3px solid #00c2a8;
-  animation:spin 1s linear infinite;
-}
-
-.lbtool-spinner.done{
-  animation:none;
-  border-top:3px solid #00ff88;
-}
-
-@keyframes spin{
-  from{transform:rotate(0deg);}
-  to{transform:rotate(360deg);}
-}
-
-.lbtool-progress{
-  width:100%; height:8px; border-radius:999px;
-  background:#111; overflow:hidden; margin-bottom:12px;
-  border:1px solid rgba(255,255,255,.08);
-}
-
-.lbtool-bar{
-  height:100%; width:0%;
-  background:linear-gradient(90deg,#00c2a8,#00ffcc);
-  transition:width .25s ease;
-}
-
-.lbtool-kv{
-  display:grid; grid-template-columns:1fr auto; gap:6px;
-  font-size:13px; opacity:.95; margin-top:10px;
-}
-
-.lbtool-btn{
-  width:100%; border:0; border-radius:12px;
-  padding:12px; cursor:pointer;
-  background:linear-gradient(90deg,#00c2a8,#00e0b8);
-  color:#001; font-weight:900; font-size:14px;
-  margin-top:10px;
-}
-
+.lbtool-title{display:flex; align-items:center; justify-content:space-between;}
+.lbtool-btn{border:0; border-radius:10px; padding:8px 10px; cursor:pointer;
+ background:#00c2a8; color:#001; font-weight:800; font-size:13px;}
+.lbtool-btn.secondary{background:#2a2a2a; color:#fff;}
+.lbtool-btn.danger{background:#ff4d4f; color:#fff;}
 .lbtool-log{
-  display:none !important; /* ocultamos el log visual, NO la lógica */
+ white-space:pre-wrap;
+ font-family:ui-monospace, monospace;
+ background:#0a0a0a; border-radius:10px; padding:10px;
+ border:1px solid rgba(255,255,255,.08);
+ font-size:12px; max-height:160px; overflow:auto;
+}
+.lbtool-fab{
+ position:fixed; bottom:18px; right:18px; z-index:999999;
+ background:#111; color:#fff; border:1px solid rgba(255,255,255,.15);
+ border-radius:999px; padding:10px 14px; cursor:pointer;
+ font-weight:900; font-size:13px;
+}
+.lb-spinner{
+ width:18px;height:18px;border:3px solid rgba(255,255,255,.2);
+ border-top:3px solid #00c2a8;border-radius:50%;
+ animation:lbspin 1s linear infinite; display:inline-block;
+ margin-right:8px; vertical-align:middle;
+}
+@keyframes lbspin{to{transform:rotate(360deg)}}
+.lb-progress{
+ height:6px;background:#222;border-radius:999px;margin:10px 0;
+ overflow:hidden;
+}
+.lb-bar{
+ height:100%;width:0%;background:#00c2a8;transition:width .3s ease;
 }
 `);
 
-// ---------- Floating button (AHORA TOGGLE) ----------
+// ---------- Floating button (TOGGLE REAL) ----------
 const fab = document.createElement('button');
 fab.className = 'lbtool-fab';
 fab.textContent = '🎬 Non-Followers';
@@ -101,7 +67,7 @@ let lastNoFollowers = [];
 let lastUser = null;
 let scanning = false;
 
-// ---------- Helpers (NO TOCADOS) ----------
+// ---------- Helpers ----------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const domp = new DOMParser();
 
@@ -112,153 +78,155 @@ const reserved = new Set([
 ]);
 
 function detectUser() {
-  const parts = location.pathname.split('/').filter(Boolean);
-  return parts.length ? parts[0] : null;
+const parts = location.pathname.split('/').filter(Boolean);
+return parts.length ? parts[0] : null;
 }
 
 function parsePeople(doc) {
-  const out = new Set();
-  const nodes = doc.querySelectorAll('li.person-summary a[href^="/"]');
-  const use = nodes.length ? nodes : doc.querySelectorAll('a[href^="/"]');
+const out = new Set();
+const nodes = doc.querySelectorAll('li.person-summary a[href^="/"]');
 
-  use.forEach(a => {
-    const href = a.getAttribute('href') || '';
-    const mm = href.match(/^\/([A-Za-z0-9._-]+)\/$/);
-    if (!mm) return;
-    const u = mm[1].toLowerCase().trim();
-    if (!reserved.has(u)) out.add(u);
-  });
+nodes.forEach(a => {
+ const href = a.getAttribute('href') || '';
+ const mm = href.match(/^\/([A-Za-z0-9._-]+)\/$/);
+ if (!mm) return;
+ const u = mm[1].toLowerCase().trim();
+ if (!reserved.has(u)) out.add(u);
+});
 
-  return out;
+return out;
 }
 
-async function scrapeAll(user, type, logFn) {
-  const base = `${location.origin}/${user}/${type}/`;
-  const users = new Set();
-  let emptyStreak = 0;
+async function scrapeAll(user, type, progressLabel) {
+const base = `${location.origin}/${user}/${type}/`;
+const users = new Set();
+let emptyStreak = 0;
 
-  for (let p = 1; p <= 800; p++) {
-    const url = p === 1 ? base : `${base}page/${p}/`;
-    const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) break;
+for (let p = 1; p <= 800; p++) {
+ const url = p === 1 ? base : `${base}page/${p}/`;
+ updateProgress(type, p);
 
-    const html = await res.text();
-    const doc = domp.parseFromString(html, 'text/html');
+ const res = await fetch(url, { credentials: 'include' });
+ if (!res.ok) break;
 
-    const before = users.size;
-    parsePeople(doc).forEach(u => users.add(u));
-    const added = users.size - before;
+ const html = await res.text();
+ const doc = domp.parseFromString(html, 'text/html');
 
-    logFn(`${type} page ${p}: +${added} (total ${users.size})`);
+ const before = users.size;
+ parsePeople(doc).forEach(u => users.add(u));
+ const added = users.size - before;
 
-    // progreso visual (ESTÉTICO)
-    updateProgress(type, p);
+ if (added === 0) emptyStreak++;
+ else emptyStreak = 0;
 
-    if (added === 0) emptyStreak++;
-    else emptyStreak = 0;
+ if (emptyStreak >= 2) break;
+ await sleep(200);
+}
 
-    if (emptyStreak >= 2) break;
-    await sleep(250);
-  }
-
-  return [...users].sort();
+return [...users].sort();
 }
 
 // ---------- UI ----------
+function togglePanel() {
+ if (panel) {
+  panel.remove();
+  panel = null;
+  return;
+ }
+ openPanel();
+}
+
+fab.onclick = togglePanel;
+
 function openPanel() {
-  if (panel) {
-    panel.remove();
-    panel = null;
-    return; // TOGGLE: si existe, cierra
-  }
+panel = document.createElement('div');
+panel.className = 'lbtool-panel';
+panel.innerHTML = `
+<div class="lbtool-title">
+ <h3>🎬 Letterboxd Non-Followers</h3>
+ <button id="lbtool-close">Cerrar</button>
+</div>
 
-  panel = document.createElement('div');
-  panel.className = 'lbtool-panel';
-  panel.innerHTML = `
-    <div class="lbtool-title">
-      <h3>🎬 Letterboxd Non-Followers</h3>
-      <button class="lbtool-x" id="lbtool-close">Cerrar</button>
-    </div>
+<div id="lb-status">Listo. Tocá RUN.</div>
+<div class="lb-progress"><div class="lb-bar" id="lb-bar"></div></div>
 
-    <div class="lbtool-status">
-      <div class="lbtool-spinner" id="lbtool-spinner"></div>
-      <div id="lbtool-status-text">Listo para analizar</div>
-    </div>
+<div style="margin:10px 0">
+ <b>Usuario:</b> <span id="lb-user">—</span><br>
+ <b>No me siguen:</b> <span id="lb-nf">—</span>
+</div>
 
-    <div class="lbtool-progress">
-      <div class="lbtool-bar" id="lbtool-bar"></div>
-    </div>
+<div>
+ <button class="lbtool-btn" id="lbtool-run">RUN</button>
+ <button class="lbtool-btn secondary" id="lbtool-copy" disabled>Copiar lista</button>
+ <button class="lbtool-btn danger" id="lbtool-openall" disabled>Abrir todos</button>
+</div>
 
-    <div class="lbtool-kv">
-      <div>👤 Usuario</div><div id="lbtool-user">—</div>
-      <div>🚫 No me siguen</div><div id="lbtool-nf">—</div>
-    </div>
+<div class="lbtool-log" id="lbtool-log"></div>
+`;
 
-    <button class="lbtool-btn" id="lbtool-run">🚀 Analizar Non-Followers</button>
+document.body.appendChild(panel);
 
-    <div class="lbtool-log" id="lbtool-log"></div>
-  `;
-
-  document.body.appendChild(panel);
-
-  panel.querySelector('#lbtool-close').onclick = () => {
-    panel.remove();
-    panel = null;
-  };
-
-  panel.querySelector('#lbtool-run').onclick = run;
-  panel.querySelector('#lbtool-user').textContent = detectUser() || '—';
+panel.querySelector('#lbtool-close').onclick = togglePanel;
+panel.querySelector('#lbtool-run').onclick = run;
+panel.querySelector('#lbtool-copy').onclick = () => {
+ GM_setClipboard(lastNoFollowers.join('\n'));
+ alert('Lista copiada ✅');
+};
+panel.querySelector('#lbtool-openall').onclick = () => {
+ lastNoFollowers.forEach(u =>
+  window.open(`https://letterboxd.com/${u}/`, '_blank')
+ );
+};
 }
 
-fab.onclick = openPanel;
-
-// ---------- VISUAL PROGRESS (NO TOCA LÓGICA) ----------
-function updateProgress(type, page){
-  const bar = panel?.querySelector('#lbtool-bar');
-  const text = panel?.querySelector('#lbtool-status-text');
-  if(!bar || !text) return;
-
-  bar.style.width = Math.min(95, page * 2) + '%';
-  text.textContent = `🔎 Analizando ${type} — página ${page}...`;
+function setStatus(text, spinning = false) {
+const el = panel.querySelector('#lb-status');
+el.innerHTML = spinning
+ ? `<span class="lb-spinner"></span>${text}`
+ : text;
 }
 
-function finishProgress(n){
-  const bar = panel?.querySelector('#lbtool-bar');
-  const text = panel?.querySelector('#lbtool-status-text');
-  const spinner = panel?.querySelector('#lbtool-spinner');
-
-  if(bar) bar.style.width = '100%';
-  if(text) text.textContent = `✨ Listo. No te siguen: ${n}`;
-  if(spinner) spinner.classList.add('done'); // DETIENE el círculo
+function updateProgress(type, page) {
+const bar = panel.querySelector('#lb-bar');
+const percent = Math.min(page * 2, 100);
+bar.style.width = percent + '%';
+setStatus(`Analizando ${type}… página ${page}`, true);
 }
 
-// ---------- RUN (MISMA LÓGICA) ----------
+// ---------- RUN (MISMA LÓGICA ORIGINAL) ----------
 async function run() {
-  if(scanning) return;
-  scanning = true;
+if (scanning) return;
+scanning = true;
 
-  lastUser = detectUser();
-  panel.querySelector('#lbtool-user').textContent = lastUser || '—';
+lastUser = detectUser();
+panel.querySelector('#lb-user').textContent = lastUser || '—';
 
-  const logEl = panel.querySelector('#lbtool-log');
-  logEl.textContent = '';
+if (!lastUser) {
+ setStatus('Abrí tu perfil primero (letterboxd.com/TUUSUARIO)', false);
+ scanning = false;
+ return;
+}
 
-  if (!lastUser) {
-    scanning = false;
-    return;
-  }
+setStatus('Recolectando following…', true);
 
-  const following = await scrapeAll(lastUser, 'following', (m) => logEl.textContent += m + '\n');
-  const followers = await scrapeAll(lastUser, 'followers', (m) => logEl.textContent += m + '\n');
+const following = await scrapeAll(lastUser, 'following');
 
-  const fset = new Set(followers);
-  const noFollowBack = following.filter(u => !fset.has(u));
-  lastNoFollowers = noFollowBack;
+setStatus('Recolectando followers…', true);
 
-  panel.querySelector('#lbtool-nf').textContent = noFollowBack.length;
+const followers = await scrapeAll(lastUser, 'followers');
 
-  finishProgress(noFollowBack.length);
-  scanning = false;
+const fset = new Set(followers);
+const noFollowBack = following.filter(u => !fset.has(u));
+lastNoFollowers = noFollowBack;
+
+panel.querySelector('#lb-nf').textContent = noFollowBack.length;
+panel.querySelector('#lbtool-copy').disabled = false;
+panel.querySelector('#lbtool-openall').disabled = noFollowBack.length === 0;
+
+setStatus(`✨ Listo. No te siguen: ${noFollowBack.length}`, false);
+panel.querySelector('#lb-bar').style.width = '100%';
+
+scanning = false;
 }
 
 })();
