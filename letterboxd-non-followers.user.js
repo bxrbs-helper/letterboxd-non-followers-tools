@@ -329,7 +329,10 @@ observer.observe(document.documentElement, {
     setText('#lbtool-user', detectUser() || '—');
   }
 
-  fab.onclick = openPanel;
+  fab.addEventListener('click', () => {
+  console.log("FAB clicked - opening panel");
+  openPanel();
+});;
 
   // ---------- RUN ----------
   async function run() {
