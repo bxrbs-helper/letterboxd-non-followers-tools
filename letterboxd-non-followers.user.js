@@ -80,26 +80,37 @@
     }
   `);
 
-  // ---------- Floating button ----------
+  // ---------- Floating button (FIX SPA + body loading) ----------
+function injectFAB() {
+  if (document.querySelector('.lbtool-fab')) return;
+
+  if (!document.body) {
+    setTimeout(injectFAB, 300);
+    return;
+  }
+
   const fab = document.createElement('button');
   fab.className = 'lbtool-fab';
   fab.textContent = '🎬 Non-Followers';
   document.body.appendChild(fab);
 
-  // ---------- State ----------
-  let panel = null;
-  let lastNoFollowers = [];
-  let lastUser = null;
+  fab.onclick = openPanel;
+}
 
-  // ---------- Helpers ----------
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-  const domp = new DOMParser();
+// Esperar a que Letterboxd cargue completamente
+window.addEventListener('load', injectFAB);
 
-  const reserved = new Set([
-    'films','film','lists','list','diary','watchlist','likes','news','about','journal','apps','legal',
-    'pro','upgrade','members','people','activity','settings','create','reviews','search','tags','crew',
-    'actor','director','network','stats'
-  ]);
+// También por si Letterboxd navega sin recargar (SPA)
+const observer = new MutationObserver(() => {
+  if (!document.querySelector('.lbtool-fab')) {
+    injectFAB();
+  }
+});
+
+observer.observe(document.documentElement, {
+  childList: true,
+  subtree: true
+});
 
   function detectUser() {
     const parts = location.pathname.split('/').filter(Boolean);
