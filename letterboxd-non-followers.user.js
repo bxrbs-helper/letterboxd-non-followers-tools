@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Letterboxd Non-Followers (Community Tool)
 // @namespace    community.letterboxd.tools
-// @version      0.2.0
-// @description  Shows who you follow on Letterboxd but who don't follow you back. Includes per-user and batch "open profile" actions. No login, no password. Uses public pages + your session cookies for fetch.
+// @version      0.2.1
+// @description  Shows who you follow on Letterboxd but who don't follow you back.
 // @author       Community
-// @match        *://letterboxd.com/*
-// @match        *://www.letterboxd.com/*
+// @match        https://letterboxd.com/*
+// @match        https://www.letterboxd.com/*
 // @grant        GM_addStyle
 // @grant        GM_setClipboard
+// @run-at       document-idle
 // ==/UserScript==
 
 (function () {
