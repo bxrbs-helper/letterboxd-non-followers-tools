@@ -94,7 +94,6 @@ function injectFAB() {
   fab.textContent = '🎬 Non-Followers';
   document.body.appendChild(fab);
 
-  fab.onclick = openPanel;
 }
 
 // Esperar a que Letterboxd cargue completamente
