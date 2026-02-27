@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Letterboxd Non-Followers (Community Tool)
 // @namespace    community.letterboxd.tools
-// @version      0.2.1
-// @description  Non followers + progress UI (sin cambiar lógica)
+// @version      0.2.2
+// @description  Non followers + UI compacta (solo estética)
 // @match        *://letterboxd.com/*
 // @match        *://www.letterboxd.com/*
 // @grant        GM_addStyle
@@ -12,70 +12,92 @@
 (function () {
 'use strict';
 
-/* ================== ESTILOS (SOLO UI) ================== */
+/* ================== ESTILOS (SOLO VISUAL) ================== */
 GM_addStyle(`
 .lbtool-panel{
-  position:fixed; top:18px; right:18px; width:380px; max-height:82vh; overflow:hidden;
-  background:#111; color:#fff; z-index:999999; border-radius:14px; padding:14px;
+  position:fixed; top:18px; right:18px; width:360px;
+  background:#111; color:#fff; z-index:999999;
+  border-radius:14px; padding:14px;
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-  box-shadow:0 10px 30px rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 10px 30px rgba(0,0,0,.45);
+  border:1px solid rgba(255,255,255,.10);
 }
-.lbtool-title{display:flex; align-items:center; justify-content:space-between;}
-.lbtool-x{border:0; background:#2a2a2a; color:#fff; border-radius:10px; padding:6px 10px; cursor:pointer;}
-.lbtool-row{display:flex; gap:8px; flex-wrap:wrap; margin:12px 0;}
+.lbtool-title{display:flex; justify-content:space-between; align-items:center;}
+.lbtool-x{border:0; background:#2a2a2a; color:#fff; border-radius:10px; padding:4px 10px; cursor:pointer;}
+
+.lbtool-row{display:flex; gap:8px; margin:12px 0;}
 .lbtool-btn{
-  border:0; border-radius:10px; padding:8px 10px; cursor:pointer;
+  border:0; border-radius:10px; padding:8px 12px; cursor:pointer;
   background:#00c2a8; color:#001; font-weight:800; font-size:13px;
 }
 .lbtool-btn.secondary{background:#2a2a2a; color:#fff;}
-.lbtool-btn.danger{background:#ff4d4f; color:#fff;}
-.lbtool-log{
-  font-family:ui-monospace, Menlo, Consolas, monospace;
-  background:#0a0a0a; border-radius:10px; padding:10px;
-  border:1px solid rgba(255,255,255,.08);
-  font-size:12px; height:80px; overflow:hidden;
-}
-.lbtool-list{
-  margin-top:10px;
-  background:#0a0a0a; border-radius:10px; padding:10px;
-  border:1px solid rgba(255,255,255,.08);
-  max-height:240px; overflow:auto;
-}
-.lbtool-item{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:8px; background:#111; border-radius:10px; margin-bottom:8px;
-}
-.lbtool-fab{
-  position:fixed; bottom:18px; right:18px; z-index:999999;
-  background:#111; color:#fff; border:1px solid rgba(255,255,255,.15);
-  border-radius:999px; padding:10px 12px; cursor:pointer;
-  font-weight:900;
+.lbtool-btn.danger{background:#ff5a5f; color:#fff;}
+
+.progress-wrap{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:8px;
 }
 
-/* Spinner */
 .lb-spinner{
-  width:22px; height:22px;
-  border:3px solid rgba(255,255,255,.2);
-  border-top:3px solid #00c2a8;
+  width:16px;
+  height:16px;
+  border:2px solid rgba(255,255,255,.2);
+  border-top:2px solid #00c2a8;
   border-radius:50%;
-  animation:spin 1s linear infinite;
-  margin:auto;
+  animation:spin 0.9s linear infinite;
+  flex-shrink:0;
 }
 @keyframes spin{to{transform:rotate(360deg);}}
 
-/* Progress bar */
 .lb-progress{
-  width:100%; height:8px; background:#1a1a1a;
-  border-radius:999px; overflow:hidden; margin-top:8px;
+  flex:1;
+  height:6px;
+  background:#1a1a1a;
+  border-radius:999px;
+  overflow:hidden;
 }
 .lb-progress-bar{
-  height:100%; width:0%;
+  height:100%;
+  width:0%;
   background:linear-gradient(90deg,#00c2a8,#00e5c4);
-  transition:width .3s ease;
+  transition:width .25s ease;
+}
+
+.lb-status{
+  font-size:12px;
+  opacity:.85;
+  margin-top:6px;
+  min-height:16px;
+}
+
+.lbtool-list{
+  margin-top:10px;
+  max-height:200px;
+  overflow:auto;
+  background:#0a0a0a;
+  border-radius:10px;
+  padding:8px;
+  border:1px solid rgba(255,255,255,.08);
+}
+
+.lbtool-item{
+  display:flex; justify-content:space-between; align-items:center;
+  padding:6px 8px; margin-bottom:6px;
+  background:#111; border-radius:8px;
+}
+
+.lbtool-fab{
+  position:fixed; bottom:18px; right:18px; z-index:999999;
+  background:#111; color:#fff;
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:999px; padding:10px 12px;
+  cursor:pointer; font-weight:900;
 }
 `);
 
-/* ================== BOTÓN FLOTANTE (NO TOCADO) ================== */
+/* ================== BOTÓN FLOTANTE (SIN CAMBIOS LÓGICOS) ================== */
 const fab = document.createElement('button');
 fab.className = 'lbtool-fab';
 fab.textContent = '🎬 Non-Followers';
@@ -170,10 +192,14 @@ function openPanel(){
       <button class="lbtool-btn danger" id="openall" disabled>🚀 Abrir todos</button>
     </div>
 
-    <div class="lb-spinner" id="spinner" style="display:none;"></div>
-    <div class="lb-progress"><div class="lb-progress-bar" id="bar"></div></div>
+    <div class="progress-wrap">
+      <div class="lb-spinner" id="spinner" style="display:none;"></div>
+      <div class="lb-progress">
+        <div class="lb-progress-bar" id="bar"></div>
+      </div>
+    </div>
 
-    <div class="lbtool-log" id="log">Listo para analizar…</div>
+    <div class="lb-status" id="status">Listo para analizar…</div>
     <div class="lbtool-list" id="list"></div>
   `;
   document.body.appendChild(panel);
@@ -183,45 +209,45 @@ function openPanel(){
   panel.querySelector('#copy').onclick=()=>GM_setClipboard(lastNoFollowers.join('\n'));
   panel.querySelector('#openall').onclick=()=>{
     lastNoFollowers.forEach((u,i)=>{
-      setTimeout(()=>window.open(`https://letterboxd.com/${u}/`,'_blank'),i*300);
+      setTimeout(()=>window.open(`https://letterboxd.com/${u}/`,'_blank'),i*250);
     });
   };
 }
 
 fab.onclick=openPanel;
 
-/* ================== RUN (MISMA LÓGICA + UI) ================== */
+/* ================== RUN (MISMA LÓGICA + UI COMPACTA) ================== */
 async function run(){
   if(isRunning)return;
   isRunning=true;
 
-  const logEl=panel.querySelector('#log');
+  const status=panel.querySelector('#status');
   const listEl=panel.querySelector('#list');
   const spinner=panel.querySelector('#spinner');
   const bar=panel.querySelector('#bar');
 
   lastUser=detectUser();
   if(!lastUser){
-    logEl.textContent='Abrí tu perfil antes de analizar.';
+    status.textContent='Abrí tu perfil antes de analizar.';
     isRunning=false;
     return;
   }
 
   spinner.style.display='block';
   bar.style.width='5%';
-  logEl.textContent='🎬 Escaneando Following...';
+  status.textContent='🔎 Analizando following...';
   listEl.innerHTML='';
 
   const following=await scrapeAll(lastUser,'following',(t,p)=>{
-    logEl.textContent=`📡 ${t} page ${p}`;
+    status.textContent=`👤 following page ${p}`;
     bar.style.width=Math.min(40+p*2,60)+'%';
   });
 
-  logEl.textContent='👥 Escaneando Followers...';
+  status.textContent='👥 Analizando followers...';
   bar.style.width='65%';
 
   const followers=await scrapeAll(lastUser,'followers',(t,p)=>{
-    logEl.textContent=`📡 ${t} page ${p}`;
+    status.textContent=`👥 followers page ${p}`;
     bar.style.width=Math.min(70+p*2,95)+'%';
   });
 
@@ -230,7 +256,7 @@ async function run(){
 
   bar.style.width='100%';
   spinner.style.display='none';
-  logEl.textContent=`✨ Listo. No te siguen: ${lastNoFollowers.length}`;
+  status.textContent=`✨ Listo. No te siguen: ${lastNoFollowers.length}`;
 
   renderList();
   panel.querySelector('#copy').disabled=false;
@@ -239,7 +265,7 @@ async function run(){
   isRunning=false;
 }
 
-/* ================== LISTA (NO TOCA SCRAPING) ================== */
+/* ================== LISTA ================== */
 function renderList(){
   const listEl=panel.querySelector('#list');
   listEl.innerHTML='';
