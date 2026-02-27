@@ -12,34 +12,44 @@
 (function () {
 'use strict';
 
-/* ================= ESTILOS PRO ================= */
+/* ================= ESTILOS PRO (LETTERING AJUSTADO A ESTÉTICA LETTERBOXD) ================= */
 GM_addStyle(`
 .lbtool-panel{
   position:fixed; top:18px; right:18px; width:350px;
   background:#0f1115; color:#fff; z-index:999999;
   border-radius:16px; padding:14px;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+
+  /* 🔥 CAMBIO ÚNICO: tipografía estilo Letterboxd */
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+               "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+
   box-shadow:0 15px 40px rgba(0,0,0,.55);
   border:1px solid rgba(255,255,255,.08);
+  letter-spacing:0.2px;
 }
 
 .lbtool-title{display:flex; justify-content:space-between; align-items:center;}
-.lbtool-title h3{margin:0; font-size:15px; font-weight:900;}
+.lbtool-title h3{
+  margin:0;
+  font-size:15px;
+  font-weight:800; /* más parecido al heading de Letterboxd */
+  letter-spacing:0.3px;
+}
 .lbtool-x{border:0;background:#222;color:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;}
 
 .lb-row{display:flex; gap:8px; margin:12px 0; flex-wrap:wrap;}
 
 .lb-btn{
   border:0;border-radius:10px;padding:8px 12px;cursor:pointer;
-  font-weight:800;font-size:13px;
+  font-weight:700; /* suavizado para look Letterboxd */
+  font-size:13px;
   background:#00c2a8;color:#001;
+  letter-spacing:0.2px;
 }
 .lb-btn.sec{background:#2a2a2a;color:#fff;}
 .lb-btn.danger{background:#ff5a5f;color:#fff;}
-.lb-btn:disabled{opacity:.5;cursor:not-allowed;}
-
-/* ✅ NUEVO: botón Follow en verde (solo para "Me siguen y no sigo") */
 .lb-btn.follow{background:#22c55e;color:#06210f;}
+.lb-btn:disabled{opacity:.5;cursor:not-allowed;}
 
 .progress-wrap{display:flex;align-items:center;gap:8px;margin-top:8px;}
 .spinner{
@@ -60,7 +70,13 @@ GM_addStyle(`
   transition:width .25s ease;
 }
 
-.status{font-size:12px;opacity:.85;margin-top:6px;min-height:16px;}
+.status{
+  font-size:12px;
+  opacity:.85;
+  margin-top:6px;
+  min-height:16px;
+  font-weight:500;
+}
 
 details.box{
   margin-top:10px;
@@ -71,9 +87,10 @@ details.box{
 summary{
   cursor:pointer;
   padding:10px;
-  font-weight:800;
+  font-weight:700;
   display:flex;
   justify-content:space-between;
+  letter-spacing:0.2px;
 }
 .list{
   max-height:200px;
@@ -84,13 +101,24 @@ summary{
   display:flex;justify-content:space-between;align-items:center;
   background:#111;border-radius:8px;padding:6px 8px;margin-bottom:6px;
 }
-.user{font-weight:800;font-size:13px;overflow:hidden;text-overflow:ellipsis;}
+.user{
+  font-weight:700;
+  font-size:13px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  letter-spacing:0.2px;
+}
 
 .fab{
   position:fixed;bottom:18px;right:18px;
   background:#111;color:#fff;border:1px solid rgba(255,255,255,.15);
   border-radius:999px;padding:10px 14px;cursor:pointer;
-  font-weight:900;z-index:999999;
+  font-weight:800;
+  z-index:999999;
+
+  /* mismo ajuste tipográfico */
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+               "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
 }
 `);
 
@@ -173,7 +201,7 @@ function openLimited(users,limit){
 function openAllCombined(){
  const all=[...new Set([...lastNoFollowBack,...lastTheyFollowMe])];
  if(!all.length)return;
- if(!confirm(`Abrir ${all.length} perfiles?`))return;
+ if(!confirm(\`Abrir \${all.length} perfiles?\`))return;
  openLimited(all,all.length);
 }
 
@@ -223,7 +251,7 @@ function togglePanel(){
  panel.querySelector('#close').onclick=()=>{panel.remove();panel=null;};
  panel.querySelector('#run').onclick=run;
  panel.querySelector('#copy').onclick=()=>{
-  GM_setClipboard([...lastNoFollowBack,...lastTheyFollowMe].join('\n'));
+  GM_setClipboard([...lastNoFollowBack,...lastTheyFollowMe].join('\\n'));
   alert('Copiado ✅');
  };
 
@@ -252,10 +280,10 @@ async function run(){
 
  spin.style.display='block';
  bar.style.width='5%';
- status.textContent=`👤 Analizando following… (${lastUser})`;
+ status.textContent=\`👤 Analizando following… (\${lastUser})\`;
 
  const following=await scrapeAll(lastUser,'following',(t,p)=>{
-  status.textContent=`👤 following page ${p}`;
+  status.textContent=\`👤 following page \${p}\`;
   bar.style.width=Math.min(40+p*2,60)+'%';
  });
 
@@ -263,7 +291,7 @@ async function run(){
  bar.style.width='65%';
 
  const followers=await scrapeAll(lastUser,'followers',(t,p)=>{
-  status.textContent=`👥 followers page ${p}`;
+  status.textContent=\`👥 followers page \${p}\`;
   bar.style.width=Math.min(70+p*2,95)+'%';
  });
 
@@ -275,7 +303,7 @@ async function run(){
 
  spin.style.display='none';
  bar.style.width='100%';
- status.textContent=`✨ Listo | 🚫 ${lastNoFollowBack.length} | 🫶 ${lastTheyFollowMe.length}`;
+ status.textContent=\`✨ Listo | 🚫 \${lastNoFollowBack.length} | 🫶 \${lastTheyFollowMe.length}\`;
 
  panel.querySelector('#c1').textContent=lastNoFollowBack.length;
  panel.querySelector('#c2').textContent=lastTheyFollowMe.length;
@@ -304,12 +332,12 @@ function render(id,arr,mode){
   const btnText  = isFollow ? 'Follow' : 'Unfollow';
 
   div.innerHTML=`
-   <span class="user">@${u}</span>
-   <button class="${btnClass}" data-u="${u}">${btnText}</button>
+   <span class="user">@\${u}</span>
+   <button class="\${btnClass}" data-u="\${u}">\${btnText}</button>
   `;
 
   div.querySelector('button').onclick=()=>{
-   window.open(`https://letterboxd.com/${u}/`,'_blank','noopener,noreferrer');
+   window.open(\`https://letterboxd.com/\${u}/\`,'_blank','noopener,noreferrer');
   };
 
   box.appendChild(div);
