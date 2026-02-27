@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Letterboxd Non-Followers PRO Analyzer
 // @namespace    community.letterboxd.tools
-// @version      0.3.1
-// @description  Analyzer PRO: No te siguen + Me siguen y no sigo + controles avanzados
+// @version      0.3.2
+// @description  Analyzer PRO: Non-followers + They follow me (I don’t follow back) + advanced controls
 // @match        *://letterboxd.com/*
 // @match        *://www.letterboxd.com/*
 // @grant        GM_addStyle
@@ -12,7 +12,7 @@
 (function () {
 'use strict';
 
-/* ================= ESTILOS PRO (LETRA MÁS CHICA + ESTILO LETTERBOXD) ================= */
+/* ================= STYLES (LETTERBOXD-LIKE + SMALLER FONT) ================= */
 GM_addStyle(`
 .lbtool-panel{
   position:fixed; top:18px; right:18px; width:350px;
@@ -26,8 +26,8 @@ GM_addStyle(`
 
 .lbtool-title{display:flex; justify-content:space-between; align-items:center;}
 .lbtool-title h3{
-  margin:0; 
-  font-size:14px; /* antes 15 */
+  margin:0;
+  font-size:14px;
   font-weight:800;
 }
 .lbtool-x{
@@ -43,7 +43,7 @@ GM_addStyle(`
 .lb-btn{
   border:0;border-radius:10px;padding:7px 11px;cursor:pointer;
   font-weight:700;
-  font-size:12px; /* antes 13 */
+  font-size:12px;
   background:#00c2a8;color:#001;
   font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
 }
@@ -71,7 +71,7 @@ GM_addStyle(`
 }
 
 .status{
-  font-size:11.5px; /* antes 12 */
+  font-size:11.5px;
   opacity:.85;margin-top:6px;min-height:16px;
 }
 
@@ -85,7 +85,7 @@ summary{
   cursor:pointer;
   padding:9px 10px;
   font-weight:800;
-  font-size:12.5px; /* más compacto */
+  font-size:12.5px;
   display:flex;
   justify-content:space-between;
 }
@@ -100,7 +100,7 @@ summary{
 }
 .user{
   font-weight:700;
-  font-size:12px; /* antes 13 */
+  font-size:12px;
   overflow:hidden;text-overflow:ellipsis;
 }
 
@@ -113,7 +113,7 @@ summary{
 }
 `);
 
-/* ================= BOTÓN FLOTANTE ================= */
+/* ================= FLOATING BUTTON ================= */
 const fab = document.createElement('button');
 fab.className = 'fab';
 fab.textContent = '🎬 Analyzer PRO';
@@ -123,7 +123,7 @@ new MutationObserver(()=>{
  if(!document.body.contains(fab)) document.body.appendChild(fab);
 }).observe(document.body,{childList:true,subtree:true});
 
-/* ================= ESTADO ================= */
+/* ================= STATE ================= */
 let panel=null;
 let isRunning=false;
 let lastNoFollowBack=[];
@@ -183,7 +183,7 @@ async function scrapeAll(user,type,cb){
  return [...users].sort();
 }
 
-/* ================= APERTURAS ================= */
+/* ================= OPEN HELPERS ================= */
 function openLimited(users,limit){
  const slice=users.slice(0,limit);
  (async()=>{
@@ -197,7 +197,7 @@ function openLimited(users,limit){
 function openAllCombined(){
  const all=[...new Set([...lastNoFollowBack,...lastTheyFollowMe])];
  if(!all.length)return;
- if(!confirm(`Abrir ${all.length} perfiles?`))return;
+ if(!confirm(`Open ${all.length} profiles?`))return;
  openLimited(all,all.length);
 }
 
@@ -214,30 +214,30 @@ function togglePanel(){
   </div>
 
   <div class="lb-row">
-    <button class="lb-btn" id="run">🔍 Analizar</button>
-    <button class="lb-btn sec" id="copy" disabled>📋 Copiar</button>
+    <button class="lb-btn" id="run">🔍 Analyze</button>
+    <button class="lb-btn sec" id="copy" disabled>📋 Copy</button>
   </div>
 
   <div class="lb-row">
-    <button class="lb-btn danger" id="openNF" disabled>🚫 Abrir No te siguen</button>
-    <button class="lb-btn sec" id="openMF" disabled>🥲 Abrir Me siguen</button>
-    <button class="lb-btn" id="open10" disabled>⚡ Abrir primeros 10</button>
-    <button class="lb-btn" id="openAll" disabled>🚀 Abrir TODOS</button>
+    <button class="lb-btn danger" id="openNF" disabled>🚫 Open Non-Followers</button>
+    <button class="lb-btn sec" id="openMF" disabled>🥲 Open They Follow Me</button>
+    <button class="lb-btn" id="open10" disabled>⚡ Open first 10</button>
+    <button class="lb-btn" id="openAll" disabled>🚀 Open ALL</button>
   </div>
 
   <div class="progress-wrap">
     <div class="spinner" id="spin" style="display:none"></div>
     <div class="progress"><div class="bar" id="bar"></div></div>
   </div>
-  <div class="status" id="status">Listo para analizar…</div>
+  <div class="status" id="status">Ready to analyze…</div>
 
   <details class="box" open>
-    <summary>🚫 No te siguen <span id="c1">0</span></summary>
+    <summary>🚫 Non-Followers <span id="c1">0</span></summary>
     <div class="list" id="list1"></div>
   </details>
 
   <details class="box">
-    <summary>🥲 Me siguen y no sigo <span id="c2">0</span></summary>
+    <summary>🥲 They Follow Me (I Don’t Follow Back) <span id="c2">0</span></summary>
     <div class="list" id="list2"></div>
   </details>
  `;
@@ -248,7 +248,7 @@ function togglePanel(){
  panel.querySelector('#run').onclick=run;
  panel.querySelector('#copy').onclick=()=>{
   GM_setClipboard([...lastNoFollowBack,...lastTheyFollowMe].join('\n'));
-  alert('Copiado ✅');
+  alert('Copied to clipboard ✅');
  };
 
  panel.querySelector('#openNF').onclick=()=>openLimited(lastNoFollowBack,lastNoFollowBack.length);
@@ -270,20 +270,20 @@ async function run(){
 
  lastUser=detectUser();
  if(!lastUser){
-  status.textContent='Abrí tu perfil primero.';
+  status.textContent='Open your profile first.';
   isRunning=false;return;
  }
 
  spin.style.display='block';
  bar.style.width='5%';
- status.textContent=`👤 Analizando following… (${lastUser})`;
+ status.textContent=`👤 Scanning following… (${lastUser})`;
 
  const following=await scrapeAll(lastUser,'following',(t,p)=>{
   status.textContent=`👤 following page ${p}`;
   bar.style.width=Math.min(40+p*2,60)+'%';
  });
 
- status.textContent='👥 Analizando followers…';
+ status.textContent='👥 Scanning followers…';
  bar.style.width='65%';
 
  const followers=await scrapeAll(lastUser,'followers',(t,p)=>{
@@ -299,7 +299,7 @@ async function run(){
 
  spin.style.display='none';
  bar.style.width='100%';
- status.textContent=`✨ Listo | 🚫 ${lastNoFollowBack.length} | 🥲 ${lastTheyFollowMe.length}`;
+ status.textContent=`✨ Done | 🚫 ${lastNoFollowBack.length} | 🥲 ${lastTheyFollowMe.length}`;
 
  panel.querySelector('#c1').textContent=lastNoFollowBack.length;
  panel.querySelector('#c2').textContent=lastTheyFollowMe.length;
