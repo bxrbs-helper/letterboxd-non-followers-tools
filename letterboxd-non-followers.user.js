@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Letterboxd Non-Followers (Community Tool)
 // @namespace    community.letterboxd.tools
-// @version      0.3.1
-// @description  Shows who you follow on Letterboxd but who don't follow you back + who follows you but you don't follow. Includes per-user and batch open actions. No login, no password. Uses public pages + your session cookies for fetch.
+// @version      0.3.2
+// @description  Shows who you follow on Letterboxd but who don't follow you back + who follows you but you don't follow. Includes per-user and batch open actions. Uses public pages + your session cookies for fetch.
 // @author       Community
 // @match        *://letterboxd.com/*
 // @match        *://www.letterboxd.com/*
@@ -144,7 +144,7 @@
 
     .lbtool-list{
       padding:10px;
-      max-height:240px;
+      max-height:220px;
       overflow:auto;
     }
     .lbtool-item{
@@ -183,14 +183,14 @@
     }
   `);
 
-  // ---------- Mount helpers (FIX BOTÓN) ----------
+  // ---------- Mount helpers ----------
   const FAB_ID = 'lbtool-fab';
   const PANEL_ID = 'lbtool-panel';
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   async function waitForBody() {
-    for (let i = 0; i < 200; i++) { // ~10s max (200*50ms)
+    for (let i = 0; i < 200; i++) {
       if (document.body) return true;
       await sleep(50);
     }
@@ -199,8 +199,6 @@
 
   function ensureFab() {
     if (!document.body) return null;
-
-    // si ya existe, no duplicar
     let fab = document.getElementById(FAB_ID);
     if (fab) return fab;
 
@@ -209,15 +207,12 @@
     fab.className = 'lbtool-fab';
     fab.textContent = '🎬 Non-Followers';
     document.body.appendChild(fab);
-
     fab.onclick = openPanel;
     return fab;
   }
 
   function ensureObserver() {
-    // Re-inyecta el botón si la web lo borra
     const mo = new MutationObserver(() => {
-      // si no hay fab, reponer
       if (!document.getElementById(FAB_ID)) ensureFab();
     });
     mo.observe(document.documentElement, { childList: true, subtree: true });
@@ -247,18 +242,50 @@
     return parts.length ? parts[0] : null;
   }
 
+  // ✅ ARREGLO CLAVE:
+  // - NO fallback a "todos los <a>" (eso contamina)
+  // - Solo toma anchors dentro de contenedores típicos de listados de gente.
   function parsePeople(doc) {
     const out = new Set();
-    const nodes = doc.querySelectorAll('li.person-summary a[href^="/"]');
-    const use = nodes.length ? nodes : doc.querySelectorAll('a[href^="/"]');
 
-    use.forEach(a => {
+    // contenedores comunes en followers/following
+    const containers = [
+      doc.querySelector('section.section') || null,
+      doc.querySelector('#content') || null,
+      doc.querySelector('main') || null
+    ].filter(Boolean);
+
+    // selectores comunes de “person summary”
+    const selectors = [
+      'li.person-summary a[href^="/"][href$="/"]',
+      'li.person a[href^="/"][href$="/"]',
+      'ul.people li a[href^="/"][href$="/"]',
+      'table.person-table a[href^="/"][href$="/"]',
+      '.people-list a[href^="/"][href$="/"]'
+    ];
+
+    let nodes = [];
+    for (const c of containers) {
+      for (const sel of selectors) {
+        const found = Array.from(c.querySelectorAll(sel));
+        if (found.length) nodes = nodes.concat(found);
+      }
+    }
+
+    // si no encontró nada, devolvemos vacío (y el caller lo reporta)
+    if (!nodes.length) return out;
+
+    for (const a of nodes) {
       const href = a.getAttribute('href') || '';
       const mm = href.match(/^\/([A-Za-z0-9._-]+)\/$/);
-      if (!mm) return;
+      if (!mm) continue;
+
       const u = mm[1].toLowerCase().trim();
-      if (!reserved.has(u)) out.add(u);
-    });
+      if (!u) continue;
+      if (reserved.has(u)) continue;
+
+      out.add(u);
+    }
 
     return out;
   }
@@ -309,11 +336,14 @@
     const html1 = await res1.text();
     const doc1 = domp.parseFromString(html1, 'text/html');
 
-    parsePeople(doc1).forEach(u => users.add(u));
+    const first = parsePeople(doc1);
+    if (first.size === 0) {
+      // importante: si no encontró nada, significa selector roto o la página no es “people list”
+      throw new Error(`No pude leer la lista de ${type}. (Letterboxd cambió el HTML o esta página no trae el listado)`);
+    }
+    first.forEach(u => users.add(u));
 
     let maxPage = getMaxPage(doc1);
-    if (!maxPage) maxPage = null;
-
     progressCb?.({ type, page: 1, totalPages: maxPage });
 
     if (maxPage) {
@@ -321,13 +351,19 @@
         const url = `${base}page/${p}/`;
         const res = await fetch(url, { credentials: 'include' });
         if (!res.ok) break;
+
         const html = await res.text();
         const doc = domp.parseFromString(html, 'text/html');
-        parsePeople(doc).forEach(u => users.add(u));
+
+        const setP = parsePeople(doc);
+        if (setP.size === 0) break; // si de golpe viene vacío, cortamos
+        setP.forEach(u => users.add(u));
+
         progressCb?.({ type, page: p, totalPages: maxPage });
         await sleep(180);
       }
     } else {
+      // fallback: avanzar hasta que 2 páginas seguidas no agreguen nada
       let emptyStreak = 0;
       for (let p = 2; p <= 800; p++) {
         const url = `${base}page/${p}/`;
@@ -338,7 +374,8 @@
         const doc = domp.parseFromString(html, 'text/html');
 
         const before = users.size;
-        parsePeople(doc).forEach(u => users.add(u));
+        const setP = parsePeople(doc);
+        setP.forEach(u => users.add(u));
         const added = users.size - before;
 
         progressCb?.({ type, page: p, totalPages: null });
@@ -417,17 +454,15 @@
       actions.className = 'lbtool-actions';
 
       const btn = document.createElement('button');
-
       if (mode === 'follow') {
         btn.className = 'lbtool-btn success';
-        btn.textContent = 'Seguir';
+        btn.textContent = 'Follow';
         btn.title = 'Abrir perfil para seguir (confirmás en Letterboxd).';
       } else {
         btn.className = 'lbtool-btn danger';
         btn.textContent = 'Unfollow';
         btn.title = 'Abrir perfil para dejar de seguir (confirmás en Letterboxd).';
       }
-
       btn.onclick = () => window.open(`https://letterboxd.com/${u}/`, '_blank', 'noopener,noreferrer');
 
       actions.appendChild(btn);
@@ -525,7 +560,6 @@
     document.body.appendChild(panel);
 
     panel.querySelector('#lbtool-close').onclick = () => { panel.remove(); panel = null; };
-
     panel.querySelector('#lbtool-run').onclick = run;
     panel.querySelector('#lbtool-copy').onclick = copyResults;
 
@@ -605,7 +639,6 @@
       const phasePct = totalPages ? Math.round((page / totalPages) * 50) : Math.min(50, 5 + page);
       const overall = Math.min(100, phaseBase + phasePct);
       setProgress(overall);
-
       if (totalPages) setStatus(`👤 ${type} page ${page}/${totalPages}`);
       else setStatus(`👤 ${type} page ${page}`);
     };
@@ -645,7 +678,7 @@
     } catch (e) {
       spinner(false);
       setProgress(0);
-      setStatus(`💥 Fallé yo (sí, yo). Error: ${String(e && e.message ? e.message : e)}`);
+      setStatus(`💥 Fallé yo (sí, yo). ${String(e && e.message ? e.message : e)}`);
     } finally {
       runBtn.disabled = false;
     }
