@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Letterboxd Non-Followers PRO Analyzer
 // @namespace    community.letterboxd.tools
-// @version      0.3.0
+// @version      0.3.1
 // @description  Analyzer PRO: No te siguen + Me siguen y no sigo + controles avanzados
 // @match        *://letterboxd.com/*
 // @match        *://www.letterboxd.com/*
@@ -12,23 +12,28 @@
 (function () {
 'use strict';
 
-/* ================= ESTILOS PRO ================= */
+/* ================= ESTILOS PRO (LETRA MÁS CHICA + ESTILO LETTERBOXD) ================= */
 GM_addStyle(`
 .lbtool-panel{
   position:fixed; top:18px; right:18px; width:350px;
   background:#0f1115; color:#fff; z-index:999999;
   border-radius:16px; padding:14px;
   font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-size:12.5px;
   box-shadow:0 15px 40px rgba(0,0,0,.55);
   border:1px solid rgba(255,255,255,.08);
 }
 
 .lbtool-title{display:flex; justify-content:space-between; align-items:center;}
-.lbtool-title h3{margin:0; font-size:15px; font-weight:900;}
+.lbtool-title h3{
+  margin:0; 
+  font-size:14px; /* antes 15 */
+  font-weight:800;
+}
 .lbtool-x{
   border:0;background:#222;color:#fff;border-radius:10px;
   padding:4px 10px;cursor:pointer;
-  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-size:12px;
 }
 
 .lb-row{
@@ -36,8 +41,9 @@ GM_addStyle(`
 }
 
 .lb-btn{
-  border:0;border-radius:10px;padding:8px 12px;cursor:pointer;
-  font-weight:800;font-size:13px;
+  border:0;border-radius:10px;padding:7px 11px;cursor:pointer;
+  font-weight:700;
+  font-size:12px; /* antes 13 */
   background:#00c2a8;color:#001;
   font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
 }
@@ -47,7 +53,7 @@ GM_addStyle(`
 
 .progress-wrap{display:flex;align-items:center;gap:8px;margin-top:8px;}
 .spinner{
-  width:10px;height:10px;
+  width:9px;height:9px;
   border:2px solid rgba(255,255,255,.2);
   border-top:2px solid #00e5c4;
   border-radius:50%;
@@ -65,8 +71,8 @@ GM_addStyle(`
 }
 
 .status{
-  font-size:12px;opacity:.85;margin-top:6px;min-height:16px;
-  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-size:11.5px; /* antes 12 */
+  opacity:.85;margin-top:6px;min-height:16px;
 }
 
 details.box{
@@ -77,11 +83,11 @@ details.box{
 }
 summary{
   cursor:pointer;
-  padding:10px;
+  padding:9px 10px;
   font-weight:800;
+  font-size:12.5px; /* más compacto */
   display:flex;
   justify-content:space-between;
-  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
 }
 .list{
   max-height:200px;
@@ -93,16 +99,17 @@ summary{
   background:#111;border-radius:8px;padding:6px 8px;margin-bottom:6px;
 }
 .user{
-  font-weight:800;font-size:13px;overflow:hidden;text-overflow:ellipsis;
-  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-weight:700;
+  font-size:12px; /* antes 13 */
+  overflow:hidden;text-overflow:ellipsis;
 }
 
 .fab{
   position:fixed;bottom:18px;right:18px;
   background:#111;color:#fff;border:1px solid rgba(255,255,255,.15);
-  border-radius:999px;padding:10px 14px;cursor:pointer;
-  font-weight:900;z-index:999999;
-  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  border-radius:999px;padding:9px 13px;cursor:pointer;
+  font-weight:800;font-size:12px;
+  z-index:999999;
 }
 `);
 
@@ -151,7 +158,6 @@ function parsePeople(doc){
  return out;
 }
 
-/* ✅ ARREGLADO: base/url SIN ESCAPES */
 async function scrapeAll(user,type,cb){
  const base = `${location.origin}/${user}/${type}/`;
  const users=new Set();
@@ -177,7 +183,7 @@ async function scrapeAll(user,type,cb){
  return [...users].sort();
 }
 
-/* ================= APERTURAS PRO ================= */
+/* ================= APERTURAS ================= */
 function openLimited(users,limit){
  const slice=users.slice(0,limit);
  (async()=>{
@@ -214,7 +220,7 @@ function togglePanel(){
 
   <div class="lb-row">
     <button class="lb-btn danger" id="openNF" disabled>🚫 Abrir No te siguen</button>
-    <button class="lb-btn sec" id="openMF" disabled>🫶 Abrir Me siguen</button>
+    <button class="lb-btn sec" id="openMF" disabled>🥲 Abrir Me siguen</button>
     <button class="lb-btn" id="open10" disabled>⚡ Abrir primeros 10</button>
     <button class="lb-btn" id="openAll" disabled>🚀 Abrir TODOS</button>
   </div>
@@ -231,7 +237,7 @@ function togglePanel(){
   </details>
 
   <details class="box">
-    <summary>🫶 Me siguen y no sigo <span id="c2">0</span></summary>
+    <summary>🥲 Me siguen y no sigo <span id="c2">0</span></summary>
     <div class="list" id="list2"></div>
   </details>
  `;
@@ -293,13 +299,13 @@ async function run(){
 
  spin.style.display='none';
  bar.style.width='100%';
- status.textContent=`✨ Listo | 🚫 ${lastNoFollowBack.length} | 🫶 ${lastTheyFollowMe.length}`;
+ status.textContent=`✨ Listo | 🚫 ${lastNoFollowBack.length} | 🥲 ${lastTheyFollowMe.length}`;
 
  panel.querySelector('#c1').textContent=lastNoFollowBack.length;
  panel.querySelector('#c2').textContent=lastTheyFollowMe.length;
 
- render('#list1',lastNoFollowBack, 'unfollow');
- render('#list2',lastTheyFollowMe, 'follow');
+ render('#list1',lastNoFollowBack,'unfollow');
+ render('#list2',lastTheyFollowMe,'follow');
 
  panel.querySelector('#openNF').disabled=!lastNoFollowBack.length;
  panel.querySelector('#openMF').disabled=!lastTheyFollowMe.length;
@@ -322,7 +328,7 @@ function render(id,arr,mode){
 
   div.innerHTML=`
    <span class="user">@${u}</span>
-   <button class="${btnClass}" data-u="${u}">${btnText}</button>
+   <button class="${btnClass}">${btnText}</button>
   `;
 
   div.querySelector('button').onclick=()=>{
