@@ -611,4 +611,35 @@
       lastFollowersNotFollowing = lastFollowers.filter(u => !followingSet.has(u));
 
       // update counts
-      setText('#lbtool-following', String(lastFollowi
+      setText('#lbtool-following', String(lastFollowing.length));
+      setText('#lbtool-followers', String(lastFollowers.length));
+      setText('#lbtool-nf', String(lastNoFollowBack.length));
+      setText('#lbtool-fns', String(lastFollowersNotFollowing.length));
+
+      setText('#lbtool-nf-pill', String(lastNoFollowBack.length));
+      setText('#lbtool-fns-pill', String(lastFollowersNotFollowing.length));
+
+      // render lists
+      renderList('#lbtool-list-nf', lastNoFollowBack, 'unfollow');
+      renderList('#lbtool-list-fns', lastFollowersNotFollowing, 'follow');
+
+      // finish
+      setProgress(100);
+      spinner(false);
+      setStatus(`✨ Listo | 🚫 ${lastNoFollowBack.length} | 👀 ${lastFollowersNotFollowing.length}`);
+
+      // enable actions
+      copyBtn.disabled = false;
+      exportBtn.disabled = false;
+      open10Btn.disabled = lastNoFollowBack.length === 0;
+      openAllBtn.disabled = (lastNoFollowBack.length + lastFollowersNotFollowing.length) === 0;
+    } catch (e) {
+      spinner(false);
+      setProgress(0);
+      setStatus(`💥 Ups. Fallé yo (sí, yo). Error: ${String(e && e.message ? e.message : e)}`);
+    } finally {
+      runBtn.disabled = false;
+    }
+  }
+
+})();
