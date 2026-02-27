@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Letterboxd Non-Followers (Community Tool)
 // @namespace    community.letterboxd.tools
-// @version      0.3.0
+// @version      0.3.1
 // @description  Shows who you follow on Letterboxd but who don't follow you back + who follows you but you don't follow. Includes per-user and batch open actions. No login, no password. Uses public pages + your session cookies for fetch.
 // @author       Community
 // @match        *://letterboxd.com/*
 // @match        *://www.letterboxd.com/*
+// @run-at       document-idle
 // @grant        GM_addStyle
 // @grant        GM_setClipboard
 // ==/UserScript==
@@ -182,11 +183,46 @@
     }
   `);
 
-  // ---------- Floating button ----------
-  const fab = document.createElement('button');
-  fab.className = 'lbtool-fab';
-  fab.textContent = '🎬 Non-Followers';
-  document.body.appendChild(fab);
+  // ---------- Mount helpers (FIX BOTÓN) ----------
+  const FAB_ID = 'lbtool-fab';
+  const PANEL_ID = 'lbtool-panel';
+
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  async function waitForBody() {
+    for (let i = 0; i < 200; i++) { // ~10s max (200*50ms)
+      if (document.body) return true;
+      await sleep(50);
+    }
+    return false;
+  }
+
+  function ensureFab() {
+    if (!document.body) return null;
+
+    // si ya existe, no duplicar
+    let fab = document.getElementById(FAB_ID);
+    if (fab) return fab;
+
+    fab = document.createElement('button');
+    fab.id = FAB_ID;
+    fab.className = 'lbtool-fab';
+    fab.textContent = '🎬 Non-Followers';
+    document.body.appendChild(fab);
+
+    fab.onclick = openPanel;
+    return fab;
+  }
+
+  function ensureObserver() {
+    // Re-inyecta el botón si la web lo borra
+    const mo = new MutationObserver(() => {
+      // si no hay fab, reponer
+      if (!document.getElementById(FAB_ID)) ensureFab();
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    return mo;
+  }
 
   // ---------- State ----------
   let panel = null;
@@ -194,11 +230,10 @@
 
   let lastFollowing = [];
   let lastFollowers = [];
-  let lastNoFollowBack = [];       // you follow them, they don't follow you
-  let lastFollowersNotFollowing = []; // they follow you, you don't follow them
+  let lastNoFollowBack = [];
+  let lastFollowersNotFollowing = [];
 
   // ---------- Helpers ----------
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const domp = new DOMParser();
 
   const reserved = new Set([
@@ -229,7 +264,6 @@
   }
 
   function getMaxPage(doc) {
-    // Intenta leer paginación: links con números (page/2/, etc)
     const nums = [];
     doc.querySelectorAll('a[href*="/page/"]').forEach(a => {
       const href = a.getAttribute('href') || '';
@@ -270,7 +304,6 @@
     const base = `${location.origin}/${user}/${type}/`;
     const users = new Set();
 
-    // page 1
     const res1 = await fetch(base, { credentials: 'include' });
     if (!res1.ok) return [];
     const html1 = await res1.text();
@@ -281,7 +314,6 @@
     let maxPage = getMaxPage(doc1);
     if (!maxPage) maxPage = null;
 
-    // progress page 1
     progressCb?.({ type, page: 1, totalPages: maxPage });
 
     if (maxPage) {
@@ -296,7 +328,6 @@
         await sleep(180);
       }
     } else {
-      // fallback: hasta 2 páginas seguidas sin nuevos
       let emptyStreak = 0;
       for (let p = 2; p <= 800; p++) {
         const url = `${base}page/${p}/`;
@@ -348,7 +379,6 @@
   }
 
   function renderList(containerSel, users, mode) {
-    // mode: "unfollow" | "follow"
     const box = panel?.querySelector(containerSel);
     if (!box) return;
 
@@ -390,7 +420,7 @@
 
       if (mode === 'follow') {
         btn.className = 'lbtool-btn success';
-        btn.textContent = 'Follow';
+        btn.textContent = 'Seguir';
         btn.title = 'Abrir perfil para seguir (confirmás en Letterboxd).';
       } else {
         btn.className = 'lbtool-btn danger';
@@ -432,13 +462,13 @@
   // ---------- UI ----------
   function openPanel() {
     if (panel) {
-      // toggle: si ya está, cerrar
       panel.remove();
       panel = null;
       return;
     }
 
     panel = document.createElement('div');
+    panel.id = PANEL_ID;
     panel.className = 'lbtool-panel';
     panel.innerHTML = `
       <div class="lbtool-title">
@@ -514,8 +544,7 @@
     };
 
     panel.querySelector('#lbtool-open10').onclick = () => {
-      if (!lastNoFollowBack.length && !lastFollowersNotFollowing.length) return;
-      // Abrir primeros 10 de "No te siguen" (lo más usado)
+      if (!lastNoFollowBack.length) return;
       openMany(lastNoFollowBack, 10);
     };
 
@@ -528,8 +557,6 @@
 
     setText('#lbtool-user', detectUser() || '—');
   }
-
-  fab.onclick = openPanel;
 
   // ---------- RUN ----------
   async function run() {
@@ -553,7 +580,6 @@
     open10Btn.disabled = true;
     openAllBtn.disabled = true;
 
-    // reset
     spinner(true);
     setProgress(0);
     setStatus('🔍 Preparando escaneo…');
@@ -573,44 +599,30 @@
     renderList('#lbtool-list-nf', [], 'unfollow');
     renderList('#lbtool-list-fns', [], 'follow');
 
-    // progress callback: fase 0 (following), fase 1 (followers)
     let phase = 0;
     const progressCb = ({ type, page, totalPages }) => {
       const phaseBase = phase === 0 ? 0 : 50;
-      const phasePct = totalPages ? Math.round((page / totalPages) * 50) : Math.min(50, 5 + page); // fallback
+      const phasePct = totalPages ? Math.round((page / totalPages) * 50) : Math.min(50, 5 + page);
       const overall = Math.min(100, phaseBase + phasePct);
-
       setProgress(overall);
 
-      if (totalPages) {
-        setStatus(`👤 ${type} page ${page}/${totalPages}`);
-      } else {
-        setStatus(`👤 ${type} page ${page}`);
-      }
+      if (totalPages) setStatus(`👤 ${type} page ${page}/${totalPages}`);
+      else setStatus(`👤 ${type} page ${page}`);
     };
 
     try {
-      // phase 0: following
       phase = 0;
-      setStatus('👤 following page 1');
       lastFollowing = await scrapeAll(lastUser, 'following', progressCb);
 
-      // phase 1: followers
       phase = 1;
-      setStatus('👥 followers page 1');
       lastFollowers = await scrapeAll(lastUser, 'followers', progressCb);
 
-      // compute
       const followingSet = new Set(lastFollowing);
       const followersSet = new Set(lastFollowers);
 
-      // You follow them, they don't follow you
       lastNoFollowBack = lastFollowing.filter(u => !followersSet.has(u));
-
-      // They follow you, you don't follow them
       lastFollowersNotFollowing = lastFollowers.filter(u => !followingSet.has(u));
 
-      // update counts
       setText('#lbtool-following', String(lastFollowing.length));
       setText('#lbtool-followers', String(lastFollowers.length));
       setText('#lbtool-nf', String(lastNoFollowBack.length));
@@ -619,16 +631,13 @@
       setText('#lbtool-nf-pill', String(lastNoFollowBack.length));
       setText('#lbtool-fns-pill', String(lastFollowersNotFollowing.length));
 
-      // render lists
       renderList('#lbtool-list-nf', lastNoFollowBack, 'unfollow');
       renderList('#lbtool-list-fns', lastFollowersNotFollowing, 'follow');
 
-      // finish
       setProgress(100);
       spinner(false);
       setStatus(`✨ Listo | 🚫 ${lastNoFollowBack.length} | 👀 ${lastFollowersNotFollowing.length}`);
 
-      // enable actions
       copyBtn.disabled = false;
       exportBtn.disabled = false;
       open10Btn.disabled = lastNoFollowBack.length === 0;
@@ -636,10 +645,18 @@
     } catch (e) {
       spinner(false);
       setProgress(0);
-      setStatus(`💥 Ups. Fallé yo (sí, yo). Error: ${String(e && e.message ? e.message : e)}`);
+      setStatus(`💥 Fallé yo (sí, yo). Error: ${String(e && e.message ? e.message : e)}`);
     } finally {
       runBtn.disabled = false;
     }
   }
+
+  // ---------- Boot ----------
+  (async () => {
+    const ok = await waitForBody();
+    if (!ok) return;
+    ensureFab();
+    ensureObserver();
+  })();
 
 })();
