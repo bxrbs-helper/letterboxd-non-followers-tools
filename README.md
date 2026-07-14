@@ -1,66 +1,37 @@
-🎬 Letterboxd Non-Followers Analyzer (1-Click Install)
-
-Analyze who:
-
-- 🚫 Doesn’t follow you back
-- 🥲 Follows you (but you don’t follow back)
-
-All inside Letterboxd. No login, no passwords, no external API.
-
+🎬 Letterboxd Connect PRO (1-Click Install)
+Todo dentro de Letterboxd. Sin login externo, sin contraseñas, sin API externa.
+🚫 Resumen — quién no te sigue de vuelta y a quién seguís vos que no te sigue
+🕓 Historial — altas y bajas de seguidores/seguidos a lo largo del tiempo
+🎯 Descubrir — encuentra gente nueva por afinidad real, a partir de los fans de tus películas mejor puntuadas (no de tu red actual), con tarjetas estilo swipe y follow/pass con un clic
+✅ Follow / Unfollow real — se ejecuta directo desde la herramienta, sin salir del panel
+🌐 Selector ES/EN
+🔍 Verificación de escaneo completo — avisa si el escaneo quedó incompleto, comparando contra el número real de seguidores/seguidos de tu perfil
 ---
-
-🚀 Install (1 Click)
-
-1. Install Tampermonkey
-
-Download Tampermonkey from the Chrome Web Store:
+🚀 Instalar (1 Click)
+1. Instalá Tampermonkey
+Descargalo desde la Chrome Web Store:
 https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo
-
 ---
-
-2. Enable User Scripts (IMPORTANT)
-
-After installing Tampermonkey:
-
-1. Open Chrome Extensions page
-   "chrome://extensions/"
-2. Find Tampermonkey
-3. Click Manage Extension
-4. Enable:
-   - ✅ Allow User Scripts
-   - (Optional) Allow on all sites
-
-This step is required for the script button to appear on Letterboxd.
-
+2. Habilitá User Scripts (IMPORTANTE)
+Después de instalar Tampermonkey:
+Abrí la página de extensiones de Chrome: `chrome://extensions/`
+Buscá Tampermonkey
+Clic en "Administrar extensión"
+Habilitá:
+✅ Allow User Scripts
+(Opcional) Allow on all sites
+Este paso es necesario para que el botón del script aparezca en Letterboxd.
 ---
-
-3. Install the Script
-
-Click the link below:
+3. Instalá el script
+Clic en el link de abajo e instalalo desde Tampermonkey:
 https://raw.githubusercontent.com/bxrbs-helper/letterboxd-non-followers-tools/main/letterboxd-non-followers.user.js
-
-Then press Install in Tampermonkey.
-
 ---
-
-4. Use the Tool
-
-1. Open your Letterboxd profile
-   (example: https://letterboxd.com/YOURUSERNAME/)
-2. Click the 🎬 Analyzer PRO floating button
-3. Press 🔍 Analyze
-
-The tool will automatically scan:
-
-- Following pages
-- Followers pages
-- And display the results in real time
-
+4. Usá la herramienta
+Abrí tu perfil de Letterboxd (ej: `https://letterboxd.com/TUUSUARIO/`)
+Clic en el botón flotante 🎬 Connect PRO
+Elegí la pestaña que quieras: Resumen, Historial o Descubrir
+La herramienta escanea automáticamente tus páginas de Siguiendo/Seguidores y muestra los resultados en tiempo real.
 ---
-
-💬 Suggestions or Issues
-
-Have feedback, suggestions, or bug reports?
-
-Contact me on Telegram:
-👉 https://t.me/Cinefilan
+💬 Sugerencias o problemas
+¿Tenés feedback, sugerencias o encontraste un bug? Escribime por Instagram:
+👉 https://www.instagram.com/bxrbs___/
